@@ -1,21 +1,3 @@
-Skip to content
-Navigation Menu
-hc0s
-Dopamine2-roothide
-
-Type / to search
-Code
-Pull requests
-Actions
-Projects
-Security
-Insights
-*** build tipa file ***
-*** build tipa file *** #2017
-Jobs
-Run details
-Workflow file for this run
-.github/workflows/roothide.yml at e9aca09
 name: "*** build tipa file ***"
 
 on:
