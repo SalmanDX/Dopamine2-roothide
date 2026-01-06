@@ -7,12 +7,12 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
-    # macos-13 is retired. Use macos-latest (macOS 15 arm64) or macos-15-intel if you need Intel.
     runs-on: macos-latest
+    # لو احتجت Intel بدل السطر اللي فوق بهذا:
     # runs-on: macos-15-intel
 
     steps:
@@ -41,9 +41,22 @@ jobs:
           rm $THEOS/sdks/iPhoneOS16.5.sdk.tar
           cd $BASEDIR
 
+      # ✅ جديد: تثبيت OpenSSL headers اللازمة لبناء trustcache على macos-latest
+      - name: Install OpenSSL (brew)
+        run: |
+          set -x
+          brew update
+          brew install openssl@3
+
+      # ✅ معدل: ربط include/lib لـ OpenSSL قبل gmake
       - name: Build and Install trustcache
         run: |
           set -x
+          export OPENSSL_PREFIX="$(brew --prefix openssl@3)"
+          export CPPFLAGS="-I${OPENSSL_PREFIX}/include"
+          export LDFLAGS="-L${OPENSSL_PREFIX}/lib"
+          export PKG_CONFIG_PATH="${OPENSSL_PREFIX}/lib/pkgconfig"
+
           git clone https://github.com/CRKatri/trustcache
           cd trustcache
           gmake -j$(sysctl -n hw.physicalcpu) OPENSSL=1
@@ -61,6 +74,7 @@ jobs:
 
       - name: Install libarchive
         run: |
+          set -x
           brew install libarchive
 
       - name: Build
@@ -69,11 +83,15 @@ jobs:
           export BASEDIR="$(pwd)"
           export THEOS="${BASEDIR}/theos"
           typeset itemcount=$(plutil -extract items raw -expect array ./Application/Dopamine/UI/Settings/Credits.plist)
-          for ((i=0; i<$itemcount; i++)); do if [ "$(plutil -extract items.$i.headerCellClass raw ./Application/Dopamine/UI/Settings/Credits.plist)" = "DOCreditsCell" ]; then DOCreditsCellIndex=$i; fi done;
+          for ((i=0; i<$itemcount; i++)); do
+            if [ "$(plutil -extract items.$i.headerCellClass raw ./Application/Dopamine/UI/Settings/Credits.plist)" = "DOCreditsCell" ]; then
+              DOCreditsCellIndex=$i
+            fi
+          done
           plutil -insert items.$DOCreditsCellIndex.names -xml "<dict><key>name</key><string>${{ github.actor }}</string><key>link</key><string>https://github.com/${{ github.repository }}</string></dict>" -append ./Application/Dopamine/UI/Settings/Credits.plist
           gmake -j$(sysctl -n hw.physicalcpu)
           TAG=$(git describe --tags --abbrev=0)
-          mv ./Application/Dopamine.tipa  "./Application/roothide-Dopamine2-v${TAG}.tipa"
+          mv ./Application/Dopamine.tipa "./Application/roothide-Dopamine2-v${TAG}.tipa"
           echo "tag=${TAG}" >> $GITHUB_ENV
 
       - name: Upload Artifact
